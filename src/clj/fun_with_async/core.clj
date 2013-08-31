@@ -8,11 +8,14 @@
             [clojure.edn :as edn]))
 
 (def state (atom []))
-
+(def connections (atom []))
 (def serial (atom 0))
 
+(defn new-color []
+  (apply str (take 6 (shuffle (seq "0123456789ABCDEF")))))
+
 (defn new-player [id]
-  {:id id :pos [5 5] :color "FF0000"})
+  {:id id :pos [5 5] :color (new-color)})
 
 (defn move-player [id motion]
   (swap! state
@@ -45,14 +48,20 @@
           (prn "connected")
           (let [id (swap! serial inc)]
             (swap! state conj (new-player id))
-            (>! outgoing (str @state))
+            (swap! connections conj outgoing)
+            (doseq [out @connections]
+              (>! out (str @state)))
             (loop []
               (when-let [msg (<! incoming)]
                 (on-key-press id msg)
                 (prn @state)
-                (>! outgoing (str @state))
+                (doseq [out @connections]
+                  (>! out (str @state)))
                 (recur)))
             (remove-player id)
+            (swap! connections disj outgoing)
+            (doseq [out @connections]
+              (>! out (str @state)))
             (prn "disconnected")))))
 
 (defn register-ws-app!
