@@ -1,10 +1,16 @@
 # fun-with-async
 
-A Clojure library designed to ... well, that part is up to you.
+Trying to have some fun with `core.async`, `core.match` and WebSockets.
 
 ## Usage
 
-FIXME
+In a REPL:
+
+```
+(.start (fun-with-async.core/server))
+```
+
+Then visit `localhost:8080`
 
 ## License
 
