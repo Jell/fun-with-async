@@ -15,6 +15,28 @@
 
 (def outgoing (chan))
 
+(def canvas
+  (.getElementById js/document "target"))
+(.setAttribute canvas "width"  (.-width  js/document))
+(.setAttribute canvas "height" (.-height js/document))
+
+(def context
+  (.getContext canvas "2d"))
+
+(defn reset-canvas []
+  (doto context
+    (.beginPath)
+    (.setFillColor "FFFFFF")
+    (.fillRect 0 0 (.-width canvas) (.-height canvas))
+    (.closePath)))
+
+(defn draw_square [x y color]
+  (doto context
+    (.beginPath)
+    (.setFillColor color)
+    (.fillRect (* 10 x) (* 10 y) 10 10)
+    (.closePath)))
+
 (def socket
   (doto (goog.net.WebSocket.)
     (.open (str "ws://" host "/"))
@@ -22,13 +44,18 @@
                        (fn [e]
                          (go (>! incoming (.-message e)))))))
 
+(defn draw-state [s]
+  (reset-canvas)
+  (doseq [{color :color [x y] :pos} s]
+    (draw_square x y color)))
+
 (defn key-handler [e]
   (go (>! outgoing (.-keyCode e))))
 
 (defn update-state [new-state-str]
   (let [new-state (read-string new-state-str)]
-    (.log js/console new-state)
-    (reset! state new-state)))
+    (reset! state new-state)
+    (draw-state new-state)))
 
 (go (update-state (<! incoming)) ; Wait for connection
     (go (while true (.send socket (<! outgoing))))

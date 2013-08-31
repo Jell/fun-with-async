@@ -9,22 +9,51 @@
 
 (def state (atom []))
 
+(def serial (atom 0))
+
+(defn new-player [id]
+  {:id id :pos [5 5] :color "FF0000"})
+
+(defn move-player [id motion]
+  (swap! state
+         (fn [s]
+           (mapv
+            (fn [object]
+              (if (= id (object :id))
+                (update-in object [:pos] #(mapv + % motion))
+                object))
+            s))))
+
+(defn remove-player [id]
+  (swap! state
+         (fn [s]
+           (remove #(= id (% :id)) s))))
+
+(defn on-key-press [id msg]
+  (prn "key pressed")
+  (case msg
+    "39" (move-player id [ 1  0])  ; right
+    "38" (move-player id [ 0 -1])  ; up
+    "37" (move-player id [-1  0])  ; left
+    "40" (move-player id [ 0  1])) ; down
+  (prn (str "ID: " id ", Key: " msg)))
+
 (defn new-connection [connection]
   (match [connection]
          [{:uri uri :in outgoing :out incoming}]
          (go
-          (>! outgoing (str @state))
-          (loop []
-            (when-let [msg (<! incoming)]
-              (case msg
-                "39" (swap! state conj "right")
-                "38" (swap! state conj "up")
-                "37" (swap! state conj "left")
-                "40" (swap! state conj "down"))
-              (prn msg)
-              (>! outgoing (str @state))
-              (recur)))
-          (prn "disconnected"))))
+          (prn "connected")
+          (let [id (swap! serial inc)]
+            (swap! state conj (new-player id))
+            (>! outgoing (str @state))
+            (loop []
+              (when-let [msg (<! incoming)]
+                (on-key-press id msg)
+                (prn @state)
+                (>! outgoing (str @state))
+                (recur)))
+            (remove-player id)
+            (prn "disconnected")))))
 
 (defn register-ws-app!
   [conn-chan]
