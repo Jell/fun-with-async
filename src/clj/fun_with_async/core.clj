@@ -7,62 +7,51 @@
             [ring.adapter.jetty :refer [run-jetty]]
             [clojure.edn :as edn]))
 
-(def state (atom []))
+(def players (atom {}))
 (def connections (atom []))
 (def serial (atom 0))
 
 (defn new-color []
   (apply str (take 6 (shuffle (seq "0123456789ABCDEF")))))
 
-(defn new-player [id]
-  {:id id :pos [5 5] :color (new-color)})
+(defn new-player []
+  {:pos [5 5] :color (new-color)})
 
 (defn move-player [id motion]
-  (swap! state
-         (fn [s]
-           (mapv
-            (fn [object]
-              (if (= id (object :id))
-                (update-in object [:pos] #(mapv + % motion))
-                object))
-            s))))
-
-(defn remove-player [id]
-  (swap! state
-         (fn [s]
-           (remove #(= id (% :id)) s))))
+  (swap! players update-in [id :pos] #(mapv + % motion)))
 
 (defn on-key-press [id msg]
-  (prn "key pressed")
+  (prn (str "ID: " id ", Key: " msg))
   (case msg
-    "39" (move-player id [ 1  0])  ; right
-    "38" (move-player id [ 0 -1])  ; up
-    "37" (move-player id [-1  0])  ; left
-    "40" (move-player id [ 0  1])) ; down
-  (prn (str "ID: " id ", Key: " msg)))
+    "39" (move-player id [ 1  0])   ; right
+    "38" (move-player id [ 0 -1])   ; up
+    "37" (move-player id [-1  0])   ; left
+    "40" (move-player id [ 0  1]))) ; down
+
+(defn send-players []
+  (let [players (vals @players)]
+    (doseq [out @connections]
+      (go (>! out (str players))))))
 
 (defn new-connection [connection]
   (match [connection]
          [{:uri uri :in outgoing :out incoming}]
          (go
-          (prn "connected")
           (let [id (swap! serial inc)]
-            (swap! state conj (new-player id))
+            (prn (str "Id: " id " connected"))
+            (swap! players assoc id (new-player))
             (swap! connections conj outgoing)
-            (doseq [out @connections]
-              (>! out (str @state)))
+            (send-players)
             (loop []
               (when-let [msg (<! incoming)]
                 (on-key-press id msg)
-                (prn @state)
-                (doseq [out @connections]
-                  (>! out (str @state)))
+                (prn @players)
+                (send-players)
                 (recur)))
-            (remove-player id)
-            (swap! connections disj outgoing)
-            (doseq [out @connections]
-              (>! out (str @state)))
-            (prn "disconnected")))))
+            (swap! players dissoc id)
+            (swap! connections outgoing)
+            (send-players)
+            (prn (str "Id: " id " connected"))))))
 
 (defn register-ws-app!
   [conn-chan]

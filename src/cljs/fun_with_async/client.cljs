@@ -7,18 +7,21 @@
             goog.net.WebSocket))
 
 (def state (atom nil))
-
-(def host
-  (aget js/window "location" "host"))
-
+(def host (aget js/window "location" "host"))
 (def incoming (chan))
-
 (def outgoing (chan))
 
+(def socket
+  (doto (goog.net.WebSocket.)
+    (.open (str "ws://" host "/"))
+    (.addEventListener goog.net.WebSocket.EventType.MESSAGE
+                       (fn [e]
+                         (go (>! incoming (.-message e)))))))
+
 (def canvas
-  (.getElementById js/document "target"))
-(.setAttribute canvas "width"  (.-width  js/document))
-(.setAttribute canvas "height" (.-height js/document))
+  (doto (.getElementById js/document "target")
+    (.setAttribute "width"  (.-width  js/document))
+    (.setAttribute "height" (.-height js/document))))
 
 (def context
   (.getContext canvas "2d"))
@@ -37,13 +40,6 @@
     (.fillRect (* 10 x) (* 10 y) 10 10)
     (.closePath)))
 
-(def socket
-  (doto (goog.net.WebSocket.)
-    (.open (str "ws://" host "/"))
-    (.addEventListener goog.net.WebSocket.EventType.MESSAGE
-                       (fn [e]
-                         (go (>! incoming (.-message e)))))))
-
 (defn draw-state [s]
   (reset-canvas)
   (doseq [{color :color [x y] :pos} s]
@@ -58,7 +54,6 @@
     (draw-state new-state)))
 
 (go (update-state (<! incoming)) ; Wait for connection
+    (.addEventListener js/document "keydown" key-handler false)
     (go (while true (.send socket (<! outgoing))))
     (go (while true (update-state (<! incoming)))))
-
-(.addEventListener js/document "keydown" key-handler false)
