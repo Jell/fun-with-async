@@ -6,7 +6,7 @@
             [cljs.reader :refer [read-string]]
             goog.net.WebSocket))
 
-(def state (atom nil))
+(def state (atom []))
 (def host (aget js/window "location" "host"))
 (def incoming (chan))
 (def outgoing (chan))
@@ -19,9 +19,7 @@
                          (go (>! incoming (.-message e)))))))
 
 (def canvas
-  (doto (.getElementById js/document "target")
-    (.setAttribute "width"  (.-width  js/document))
-    (.setAttribute "height" (.-height js/document))))
+  (.getElementById js/document "target"))
 
 (def context
   (.getContext canvas "2d"))
@@ -45,13 +43,34 @@
   (doseq [{color :color [x y] :pos} s]
     (draw_square x y color)))
 
+(def key-codes {"38" "up"
+                "87" "up"
+                "83" "down"
+                "40" "down"
+                "37" "left"
+                "65" "left"
+                "39" "right"
+                "68" "right"})
+
 (defn key-handler [e]
-  (go (>! outgoing (.-keyCode e))))
+  (let [code (str (.-keyCode e))]
+    (.log js/console code)
+    (when-let [motion (get key-codes code)]
+      (go (>! outgoing motion)))))
 
 (defn update-state [new-state-str]
   (let [new-state (read-string new-state-str)]
     (reset! state new-state)
     (draw-state new-state)))
+
+(defn resize-canvas []
+  (doto canvas
+    (.setAttribute "width"  (.-innerWidth  js/window))
+    (.setAttribute "height" (.-innerHeight js/window)))
+  (draw-state @state))
+
+(resize-canvas)
+(set! (.-onresize js/window) resize-canvas)
 
 (go (update-state (<! incoming)) ; Wait for connection
     (.addEventListener js/document "keydown" key-handler false)

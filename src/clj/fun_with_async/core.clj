@@ -20,13 +20,15 @@
 (defn move-player [id motion]
   (swap! players update-in [id :pos] #(mapv + % motion)))
 
+(def motions {"up"    [ 0 -1]
+              "down"  [ 0  1]
+              "left"  [-1  0]
+              "right" [ 1  0]})
+
 (defn on-key-press [id msg]
-  (prn (str "ID: " id ", Key: " msg))
-  (case msg
-    "39" (move-player id [ 1  0])   ; right
-    "38" (move-player id [ 0 -1])   ; up
-    "37" (move-player id [-1  0])   ; left
-    "40" (move-player id [ 0  1]))) ; down
+  (prn (str "ID: " id ", Motion: " msg))
+  (when-let [motion (motions msg)]
+    (move-player id motion)))
 
 (defn send-players []
   (let [players (vals @players)]
