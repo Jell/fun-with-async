@@ -1,6 +1,6 @@
 (ns fun-with-async.core
   (:require [com.keminglabs.jetty7-websockets-async.core :as ws]
-            [clojure.core.async :refer [chan go <! >!]]
+            [clojure.core.async :refer [chan go <! >! put!]]
             [clojure.core.match :refer [match]]
             [compojure.core :refer [routes]]
             [compojure.route :as route]
@@ -33,27 +33,25 @@
 (defn send-players []
   (let [players (vals @players)]
     (doseq [out @connections]
-      (go (>! out (str players))))))
+      (put! out (str players)))))
 
-(defn new-connection [connection]
-  (match [connection]
-         [{:uri uri :in outgoing :out incoming}]
-         (go
-          (let [id (swap! serial inc)]
-            (prn (str "Id: " id " connected"))
-            (swap! players assoc id (new-player))
-            (swap! connections conj outgoing)
-            (send-players)
-            (loop []
-              (when-let [msg (<! incoming)]
-                (on-key-press id msg)
-                (prn @players)
-                (send-players)
-                (recur)))
-            (swap! players dissoc id)
-            (swap! connections outgoing)
-            (send-players)
-            (prn (str "Id: " id " connected"))))))
+(defn new-connection [{uri :uri outgoing :in incoming :out}]
+  (go
+   (let [id (swap! serial inc)]
+     (prn (str "Id: " id " connected"))
+     (swap! players assoc id (new-player))
+     (swap! connections conj outgoing)
+     (send-players)
+     (loop []
+       (when-let [msg (<! incoming)]
+         (on-key-press id msg)
+         (prn @players)
+         (send-players)
+         (recur)))
+     (swap! players dissoc id)
+     (swap! connections outgoing)
+     (send-players)
+     (prn (str "Id: " id " connected")))))
 
 (defn register-ws-app!
   [conn-chan]

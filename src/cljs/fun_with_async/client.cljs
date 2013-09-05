@@ -10,13 +10,14 @@
 (def host (aget js/window "location" "host"))
 (def incoming (chan))
 (def outgoing (chan))
+(def keyevents (chan))
 
 (def socket
   (doto (goog.net.WebSocket.)
     (.open (str "ws://" host "/"))
     (.addEventListener goog.net.WebSocket.EventType.MESSAGE
                        (fn [e]
-                         (go (>! incoming (.-message e)))))))
+                         (put! incoming (.-message e))))))
 
 (def canvas
   (.getElementById js/document "target"))
@@ -52,12 +53,6 @@
                 "39" "right"
                 "68" "right"})
 
-(defn key-handler [e]
-  (let [code (str (.-keyCode e))]
-    (.log js/console code)
-    (when-let [motion (get key-codes code)]
-      (go (>! outgoing motion)))))
-
 (defn update-state [new-state-str]
   (let [new-state (read-string new-state-str)]
     (reset! state new-state)
@@ -73,6 +68,12 @@
 (set! (.-onresize js/window) resize-canvas)
 
 (go (update-state (<! incoming)) ; Wait for connection
-    (.addEventListener js/document "keydown" key-handler false)
+    (.addEventListener js/document "keydown" (fn [e] (put! keyevents)) false)
     (go (while true (.send socket (<! outgoing))))
-    (go (while true (update-state (<! incoming)))))
+    (go (while true (update-state (<! incoming))))
+    (go (while true
+          (let [key (<! keyevents)
+                code (str (.-keyCode e))]
+            (.log js/console code)
+            (when-let [motion (get key-codes code)]
+              (>! outgoing motion))))))
